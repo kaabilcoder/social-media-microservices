@@ -1,0 +1,38 @@
+# Node modules (ignore in all subdirectories)
+**/node_modules/
+
+# Logs
+logs/
+**/*.log
+npm-debug.log*
+
+# Environment files (API keys, secrets, etc.)
+.env
+.env.*
+!.env.example
+
+# Build and output directories
+**/dist/
+**/build/
+**/out/
+
+# Temporary / cache files
+.tmp/
+temp/
+*.tmp
+
+# Dependency lock (optional — keep if you want reproducible installs)
+# package-lock.json
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Test coverage
+coverage/
+
+# Local data files (databases, dumps, etc.)
+*.rdb
+*.db
+data/
+
