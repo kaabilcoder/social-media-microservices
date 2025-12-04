@@ -14,10 +14,11 @@ const errorHandler = require("./middleware/errorHandler")
 const app = express();
 const PORT = process.env.PORT || 3001;
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017"
+const DB_NAME=process.env.DB_NAME
 
 // connect to mongo
 mongoose
-  .connect(MONGODB_URI)
+  .connect(`${MONGODB_URI}/${DB_NAME}`)
   .then(() => logger.info("connected to mongodb"))
   .catch((e) => logger.error("Mongo connection error", e));
 
@@ -56,7 +57,7 @@ app.use((req, res, next) => {
 // IP based rate limiting for sensitive endpoints
 const sensitiveEndpointsLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,           // 15 minutes
-  max: 50,                          // limit each ip to 100 requests per 'window
+  max: 50,                          // limit each ip to 50 requests per 'window
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {
