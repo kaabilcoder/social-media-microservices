@@ -5,6 +5,7 @@ const User = require("../models/user")
 const generateTokens = require("../utils/generateTokens")
 const logger = require("../utils/logger")
 const { validateRegistration, validateLogin } = require("../utils/validation")
+const RefreshTokenModel = require("../models/RefreshToken")
 
 // user registration
 const registerUser = async (req, res) => {
@@ -60,7 +61,7 @@ const registerUser = async (req, res) => {
 
 // user login
 const loginUser = async (req, res) => {
-    logger.warn("Login endpoint hit...")
+    logger.info("Login endpoint hit...")
     try {
         const { error } = validateLogin(req.body);
         if (error) {
@@ -82,21 +83,23 @@ const loginUser = async (req, res) => {
             });
         }
 
-        const verifiedPassword = existingUser && await argon2.verify(existingUser.password, password);
-        if (!verifiedPassword) {
+        const isValidPassword = await existingUser.comparePassword(password)
+        
+        if (!isValidPassword) {
             logger.warn("Password is incorrect");
             return res.status(400).json({
                 success: false,
-                message: "Passwrod is incorrect"
+                message: "Password is incorrect"
             })
         }
 
         const { accessToken, refreshToken } = await generateTokens(existingUser);
-        res.status(201).json({
+        res.status(200).json({
             success: true,
             message: "You are logged in",
             accessToken,
-            refreshToken
+            refreshToken,
+            userId: existingUser._id
         })
 
     } catch (error) {
@@ -109,13 +112,88 @@ const loginUser = async (req, res) => {
 }
 
 // refresh token
+const refreshTokenHandler = async(req, res) => {
+    logger.info("Refresh token generator endpoint hit");
+    try{
 
+        const { refreshToken } = req.body;
+        if(!refreshToken){
+            logger.warn("Refresh token missing")
+            return res.status(400).json({
+                success: false,
+                message: "Refresh token missing"
+            });
+        }
 
+        const storedToken = await RefreshTokenModel.findOne({token: refreshToken})
+        if(!storedToken || storedToken.expiresAt < new Date()){
+            logger.warn("Invalid or expired refresh Token")
 
+            return res.status(401).json({
+                success: false,
+                message: "Invalid or expired refresh Token"
+            })
+        };
+
+        const user = await User.findById(storedToken.user)
+        if(!user){
+            logger.warn("User not found")
+
+            return res.status(401).json({
+                success: false,
+                message: "User not found"
+            })
+        }
+
+        const {accessToken: newAccessToken, refreshToken: newRefreshToken} = await generateTokens(user)
+
+        // delete the old refresh token
+        await RefreshTokenModel.deleteOne({_id: storedToken._id})
+
+        res.json({
+            accessToken: newAccessToken,
+            refreshToken: newRefreshToken
+        })
+    } catch (error) {
+        logger.error('RefreshToken generation error occured', error);
+        res.status(500).json({
+            success: false,
+            message: 'RefreshToken generation error occured'
+        })
+    }
+}
 
 
 
 // logout
+const logoutHandler = async(req, res) => {
+    logger.info("Logout endpoint hit...")
+    try{
+
+        const {refreshToken} = req.body;
+        if(!refreshToken){
+            logger.warn("Refresh token missing")
+            return res.status(400).json({
+                success: false,
+                message: "Refresh token missing"
+            });
+        }
+
+        await RefreshTokenModel.deleteOne({ token: refreshToken })
+        logger.info("Refresh token deleted for logout")
+        res.json({
+            success: true,
+            message: "Logged out successfully!"
+        })
 
 
-module.exports = {loginUser, registerUser };
+    } catch (error) {
+        logger.error('Error while logging out', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error while logging out'
+        })
+    }
+}
+
+module.exports = {loginUser, registerUser, refreshTokenHandler, logoutHandler };
