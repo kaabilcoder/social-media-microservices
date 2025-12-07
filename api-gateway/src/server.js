@@ -8,6 +8,7 @@ const { RedisStore } = require("rate-limit-redis");
 const logger = require("./utils/logger");
 const proxy = require("express-http-proxy");
 const errorHandler = require("./middleware/errorHandler");
+const { authMiddleware } = require("./middleware/authMiddleware");
 
 const app = express();
 const PORT = process.env.PORT;
@@ -46,10 +47,10 @@ const proxyOptions = {
     return req.originalUrl.replace(/^\/v1/, "/api");
   },
   proxyErrorHandler: (err, res, next) => {
-    logger.error(`proxy error ${err.message}`);
+    logger.error("Proxy Error:", err);
     res.status(500).json({
       message: `internal server error`,
-      error: err.message,
+      error: err.message || 'Proxying failed',
     });
   },
 };
@@ -60,6 +61,10 @@ app.use(
   "/v1/auth",
   proxy(process.env.IDENTITY_SERVICE_URI, {
     ...proxyOptions,
+    proxyReqOptDecorator: (proxyReqOpts, srcReq) => {
+      proxyReqOpts.headers["Content-Type"] = "application/json";
+      return proxyReqOpts;
+    },
     userResDecorator: (proxyRes, proxyResData, userReq, userRes) => {
       logger.info(
         `Response received from identity service: ${proxyRes.statusCode}`
@@ -69,10 +74,29 @@ app.use(
   })
 );
 
+// Setting up proxy for post service
+
+app.use("/v1/posts", authMiddleware, proxy(process.env.POST_SERVICE_URI, {
+  ...proxyOptions,
+  proxyReqOptDecorator: (proxyReqOpts, srcReq) => {
+      proxyReqOpts.headers["Content-Type"] = "application/json";
+      proxyReqOpts.headers['x-user-id'] = srcReq.user.userId;
+      return proxyReqOpts;
+    },
+  userResDecorator: (proxyRes, proxyResData, userReq, userRes) => {
+      logger.info(
+        `Response received from post service: ${proxyRes.statusCode}`
+      );
+      return proxyResData;
+  }
+})); 
+
+
 app.use(errorHandler)
 
 app.listen(PORT, () => {
   logger.info(`API gateway is running on port ${PORT}`)
   logger.info(`Identity service is running on port ${process.env.IDENTITY_SERVICE_URI}`)
+  logger.info(`Post service is running on port ${process.env.POST_SERVICE_URI}`)
   logger.info(`Redis Url: ${process.env.REDIS_URI}`)
 })
