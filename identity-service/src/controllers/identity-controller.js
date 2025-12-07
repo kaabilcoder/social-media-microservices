@@ -1,5 +1,3 @@
-
-
 const argon2 = require("argon2")
 const User = require("../models/user")
 const generateTokens = require("../utils/generateTokens")
